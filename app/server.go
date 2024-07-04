@@ -143,7 +143,11 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error, doneCha
 		transferErrChan <- err
 	}
 
-	conn.Write([]byte(Empty200))
+	if requestTarget == "" {
+		conn.Write([]byte(Empty200))
+	} else {
+		conn.Write([]byte(Empty404))
+	}
 }
 
 func main() {
