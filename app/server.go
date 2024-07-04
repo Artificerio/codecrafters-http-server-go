@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -373,6 +374,7 @@ func handleEcho(headers map[string]string, body []byte) (*Response, error) {
 			if _, isValid := supportedEncodings[e]; isValid {
 				r.encoding = e
 				compressedBody, err := compressBody(body)
+				log.Println(compressedBody)
 				if err != nil {
 					return nil, err
 				}
@@ -395,5 +397,6 @@ func compressBody(body []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	return buf.Bytes(), nil
+	hexBytes := hex.EncodeToString(buf.Bytes())
+	return []byte(hexBytes), nil
 }
