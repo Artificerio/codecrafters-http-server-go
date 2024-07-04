@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -15,7 +16,6 @@ import (
 	"sync"
 )
 
-var methods = []string{"GET", "POST", "PUT", "DELETE"}
 var directory = flag.String("directory", "/tmp/", "directory to search files in")
 
 const (
@@ -86,7 +86,7 @@ func NewServer(options ...Option) *Server {
 	return s
 }
 
-func (s *Server) serve(transferErrChan chan<- error, doneChan chan<- string) {
+func (s *Server) serve(transferErrChan chan<- error) {
 	defer s.wg.Done()
 
 	for {
@@ -95,12 +95,12 @@ func (s *Server) serve(transferErrChan chan<- error, doneChan chan<- string) {
 			transferErrChan <- err
 		} else {
 			s.wg.Add(1)
-			go s.handleConn(conn, transferErrChan, doneChan)
+			go s.handleConn(conn, transferErrChan)
 		}
 	}
 }
 
-func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error, doneChan chan<- string) {
+func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error) {
 	defer s.wg.Done()
 	defer func() {
 		err := conn.Close()
@@ -131,8 +131,6 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error, doneCha
 		target = urlParts[2]
 	}
 
-	log.Println("here:", method, path, target)
-
 	headers := make(map[string]string)
 	for {
 		line, err := r.ReadString('\n')
@@ -159,6 +157,8 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error, doneCha
 	if err != nil {
 		transferErrChan <- err
 	}
+
+	log.Println("here:", method, path, target) // GET, files, foo
 
 	switch path {
 	case "":
@@ -188,6 +188,32 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error, doneCha
 		if err != nil {
 			transferErrChan <- err
 		}
+	case "files":
+		switch method {
+		case "GET":
+			path := *directory + target
+			file, err := os.Open(path)
+			if err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					conn.Write([]byte(Empty400))
+				}
+				transferErrChan <- err
+				return
+			}
+			fileContents, err := io.ReadAll(file)
+			if err != nil {
+				transferErrChan <- err
+			}
+			r := NewResponse(
+				WithStatus(http.StatusOK),
+				WithBody(fileContents),
+				WithContentType("application/octet-stream"),
+			)
+			err = r.writeResponse(conn)
+			if err != nil {
+				transferErrChan <- err
+			}
+		}
 	default:
 		r := NewResponse(
 			WithStatus(http.StatusNotFound),
@@ -208,9 +234,9 @@ func main() {
 
 	wg := &sync.WaitGroup{}
 	transferErrChan := make(chan error)
-	doneChan := make(chan string)
+
 	wg.Add(1)
-	go handleStatus(wg, transferErrChan, doneChan)
+	go handleStatus(wg, transferErrChan)
 
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, os.Interrupt)
@@ -222,22 +248,14 @@ func main() {
 	)
 
 	wg.Add(1)
-	go srv.serve(transferErrChan, doneChan)
+	go srv.serve(transferErrChan)
 	<-stopCh
 }
 
-func handleStatus(wg *sync.WaitGroup, transferErrChan <-chan error, doneChan <-chan string) {
+func handleStatus(wg *sync.WaitGroup, transferErrChan <-chan error) {
 	defer wg.Done()
-	doneCnt := 0
-	for {
-		select {
-		case err := <-transferErrChan:
-			log.Println("an error has occured", err)
-		case status := <-doneChan:
-			doneCnt++
-			msg := fmt.Sprintf("%v|%v\n", status, doneCnt)
-			log.Println(msg)
-		}
+	for err := range transferErrChan {
+		log.Println(err)
 	}
 }
 
