@@ -195,7 +195,7 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error) {
 			file, err := os.Open(path)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
-					conn.Write([]byte(Empty400))
+					conn.Write([]byte(Empty404))
 				}
 				transferErrChan <- err
 				return
