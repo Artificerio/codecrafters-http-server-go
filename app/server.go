@@ -39,6 +39,10 @@ var codeToStatus = map[int]string{
 	405: "Method Not Allowed",
 }
 
+var supportedEncodings = map[string]struct{}{
+	"gzip": struct{}{},
+}
+
 type Server struct {
 	l    net.Listener
 	wg   *sync.WaitGroup
@@ -171,7 +175,6 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error) {
 		if err != nil {
 			transferErrChan <- err
 		}
-
 	case "echo":
 		r := handleEcho(headers, []byte(target))
 		err = r.writeResponse(conn)
@@ -328,6 +331,11 @@ func (r *Response) writeResponse(w io.Writer) error {
 		sb.WriteString(contentType)
 	}
 
+	if r.encoding != "" {
+		contentEncoding := fmt.Sprintf("Content-Encoding: %s\r\n", r.encoding)
+		sb.WriteString(contentEncoding)
+	}
+
 	if r.body != nil {
 		contentLength := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(r.body))
 		sb.WriteString(contentLength)
@@ -350,5 +358,12 @@ func handleEcho(headers map[string]string, body []byte) *Response {
 		WithContentType("text/plain"),
 		WithBody(body),
 	)
+	contentEncoding, ok := headers["Accept-Encoding"]
+	if ok {
+		if _, isValid := supportedEncodings[contentEncoding]; isValid {
+			r.encoding = contentEncoding
+			r.body = nil
+		}
+	}
 	return r
 }
