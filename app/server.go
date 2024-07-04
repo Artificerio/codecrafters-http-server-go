@@ -344,7 +344,13 @@ func (r *Response) writeResponse(w io.Writer) error {
 	}
 
 	if r.body != nil {
-		contentLength := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(r.body))
+		length := 0
+		if r.compressed {
+			length = len(r.body) / 2
+		} else {
+			length = len(r.body)
+		}
+		contentLength := fmt.Sprintf("Content-Length: %d\r\n\r\n", length)
 		sb.WriteString(contentLength)
 		sb.WriteString(string(r.body))
 	} else {
@@ -378,6 +384,7 @@ func handleEcho(headers map[string]string, body []byte) (*Response, error) {
 					return nil, err
 				}
 				r.body = compressedBody
+				r.compressed = true
 				break
 			}
 		}
@@ -402,5 +409,5 @@ func compressBody(body []byte) ([]byte, error) {
 
 	hexStr := hex.EncodeToString(compressedBytes)
 
-	return []byte(hexStr), nil
+	return []byte(strings.TrimSpace(hexStr)), nil
 }
