@@ -374,7 +374,6 @@ func handleEcho(headers map[string]string, body []byte) (*Response, error) {
 			if _, isValid := supportedEncodings[e]; isValid {
 				r.encoding = e
 				compressedBody, err := compressBody(body)
-				log.Println(compressedBody)
 				if err != nil {
 					return nil, err
 				}
@@ -389,14 +388,19 @@ func handleEcho(headers map[string]string, body []byte) (*Response, error) {
 
 func compressBody(body []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	w := gzip.NewWriter(&buf)
-	defer w.Close()
+	gw := gzip.NewWriter(&buf)
 
-	_, err := w.Write(body)
-	if err != nil {
+	if _, err := gw.Write(body); err != nil {
 		return nil, err
 	}
 
-	hexBytes := hex.EncodeToString(buf.Bytes())
-	return []byte(hexBytes), nil
+	if err := gw.Close(); err != nil {
+		return nil, err
+	}
+
+	compressedBytes := buf.Bytes()
+
+	hexStr := hex.EncodeToString(compressedBytes)
+
+	return []byte(hexStr), nil
 }
