@@ -358,12 +358,17 @@ func handleEcho(headers map[string]string, body []byte) *Response {
 		WithContentType("text/plain"),
 		WithBody(body),
 	)
-	contentEncoding, ok := headers["Accept-Encoding"]
+	clientEncodings, ok := headers["Accept-Encoding"]
 	if ok {
-		if _, isValid := supportedEncodings[contentEncoding]; isValid {
-			r.encoding = contentEncoding
-			r.body = nil
+		encodings := strings.Fields(clientEncodings)
+		for _, encoding := range encodings {
+			if _, isValid := supportedEncodings[encoding]; isValid {
+				r.encoding = encoding
+				r.body = nil
+				break
+			}
 		}
 	}
+
 	return r
 }
