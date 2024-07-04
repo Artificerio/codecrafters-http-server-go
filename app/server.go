@@ -76,7 +76,7 @@ func WithWg(wg *sync.WaitGroup) Option {
 	}
 }
 
-func NewServer(options ...Option) *Server {
+func NewServer(options ...Option) (*Server, error) {
 	s := &Server{}
 	for _, opt := range options {
 		opt(s)
@@ -84,12 +84,11 @@ func NewServer(options ...Option) *Server {
 
 	l, err := net.Listen(network, net.JoinHostPort(s.info.host, s.info.port))
 	if err != nil {
-		log.Println(err)
-		return nil
+		return nil, err
 	}
 	s.l = l
 
-	return s
+	return s, nil
 }
 
 func (s *Server) serve(transferErrChan chan<- error) {
@@ -259,11 +258,15 @@ func main() {
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, os.Interrupt)
 
-	srv := NewServer(
+	srv, err := NewServer(
 		WithHost("0.0.0.0"),
 		WithPort("4221"),
 		WithWg(wg),
 	)
+
+	if err != nil {
+		transferErrChan <- err
+	}
 
 	wg.Add(1)
 	go srv.serve(transferErrChan)
