@@ -178,6 +178,16 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error, doneCha
 		if err != nil {
 			transferErrChan <- err
 		}
+	case "user-agent":
+		r := NewResponse(
+			WithStatus(http.StatusOK),
+			WithContentType("text/plain"),
+			WithBody([]byte(headers["User-Agent"])),
+		)
+		err = r.writeResponse(conn)
+		if err != nil {
+			transferErrChan <- err
+		}
 	default:
 		r := NewResponse(
 			WithStatus(http.StatusNotFound),
