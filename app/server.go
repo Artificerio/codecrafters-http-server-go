@@ -143,8 +143,7 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error, doneCha
 		transferErrChan <- err
 	}
 
-	switch requestTarget {
-	}
+	conn.Write([]byte(Empty200))
 }
 
 func main() {
@@ -170,43 +169,6 @@ func main() {
 	wg.Add(1)
 	go srv.serve(transferErrChan, doneChan)
 	<-stopCh
-
-	// 	wg := &sync.WaitGroup{}
-	// 	for {
-	// 		c, err := l.Accept()
-	// 		if err != nil {
-	// 			log.Println("closing server")
-	// 			break
-	// 		}
-	// 		wg.Add(1)
-	// 		go handleConnection(wg, c)
-	// 	}
-
-	// 	wg.Wait()
-	// }
-
-	// func handleConnection(wg *sync.WaitGroup, c net.Conn) {
-	// 	defer func() {
-	// 		err := c.Close()
-	// 		if err != nil {
-	// 			log.Println(err)
-	// 		}
-	// 	}()
-	// 	defer wg.Done()
-	// 	buf := make([]byte, 4096)
-	// 	_, err := c.Read(buf)
-	// 	if err != nil {
-	// 		log.Println("error reading data from connection")
-	// 		return
-	// 	}
-	// 	requestMap := parseRequest(string(buf))
-
-	// 	for _, method := range methods {
-	// 		if _, ok := requestMap[method]; ok {
-	// 			handleRequest(c, requestMap, method)
-	// 		}
-	// 	}
-
 }
 
 func handleStatus(wg *sync.WaitGroup, transferErrChan <-chan error, doneChan <-chan string) {
@@ -223,91 +185,3 @@ func handleStatus(wg *sync.WaitGroup, transferErrChan <-chan error, doneChan <-c
 		}
 	}
 }
-
-// func handleRequest(c net.Conn, requestMap map[string][]string, method string) {
-// 	requestTarget := requestMap[method][0]
-// 	switch {
-// 	case strings.HasPrefix(requestTarget, "/files/"):
-// 		switch method {
-// 		case "GET":
-// 			filename := strings.TrimPrefix(requestTarget, "/files/")
-// 			file, err := os.Open(*directory + filename)
-// 			defer func() {
-// 				err := file.Close()
-// 				if err != nil {
-// 					log.Println(err)
-// 					return
-// 				}
-// 			}()
-// 			if err != nil {
-// 				if errors.Is(err, os.ErrNotExist) {
-// 					c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
-// 					return
-// 				}
-// 			}
-// 			fileData, err := io.ReadAll(file)
-// 			if err != nil {
-// 				log.Println(err)
-// 				return
-// 			}
-// 			c.Write([]byte(fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %v\r\n\r\n%v", len(fileData), string(fileData))))
-// 		case "POST":
-// 			filename := strings.TrimPrefix(requestTarget, "/files/")
-// 			file, err := os.Create(*directory + filename)
-// 			defer func() {
-// 				err := file.Close()
-// 				if err != nil {
-// 					log.Println(err)
-// 					return
-// 				}
-// 			}()
-// 			if err != nil {
-// 				if errors.Is(err, os.ErrExist) {
-// 					c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
-// 					return
-// 				}
-// 			}
-// 			data := requestMap["Request-Body:"]
-// 			_, err = file.WriteString(strings.Join(data, " "))
-// 			if err != nil {
-// 				log.Println(err)
-// 				return
-// 			}
-// 			c.Write([]byte("HTTP/1.1 201 Created\r\n\r\n"))
-// 		}
-// 	case strings.HasPrefix(requestTarget, "/echo/"):
-// 		resp := strings.TrimPrefix(requestTarget, "/echo/")
-// 		c.Write([]byte(fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(resp), resp)))
-// 	case strings.HasPrefix(requestTarget, "/user-agent"):
-// 		resp := requestMap["User-Agent:"][0]
-// 		c.Write([]byte(fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %v\r\n\r\n%v", len(resp), resp)))
-// 	default:
-// 		if requestTarget != "/" {
-// 			c.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
-// 		} else {
-// 			c.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
-// 		}
-// 	}
-// }
-
-// func parseRequest(r string) map[string][]string {
-// 	requestData := strings.Split(string(r), "\r\n")
-// 	requestMap := make(map[string][]string)
-// 	for _, field := range requestData {
-// 		headerField := ""
-// 		for i, str := range strings.Fields(field) {
-// 			if i == 0 {
-// 				headerField = str
-// 				continue
-// 			}
-// 			requestMap[headerField] = append(requestMap[headerField], str)
-// 		}
-// 	}
-// 	idx := strings.LastIndex(r, "\r\n")
-// 	body := ""
-// 	if idx+2 < len(r) {
-// 		body = r[idx+2:]
-// 	}
-// 	requestMap["Request-Body:"] = strings.Fields(string(bytes.Trim([]byte(body), "\x00")))
-// 	return requestMap
-// }
