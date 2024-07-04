@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"errors"
 	"flag"
 	"fmt"
@@ -176,7 +178,11 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error) {
 			transferErrChan <- err
 		}
 	case "echo":
-		r := handleEcho(headers, []byte(target))
+		r, err := handleEcho(headers, []byte(target))
+		if err != nil {
+			transferErrChan <- err
+			return
+		}
 		err = r.writeResponse(conn)
 		if err != nil {
 			transferErrChan <- err
@@ -352,7 +358,7 @@ func (r *Response) writeResponse(w io.Writer) error {
 	return nil
 }
 
-func handleEcho(headers map[string]string, body []byte) *Response {
+func handleEcho(headers map[string]string, body []byte) (*Response, error) {
 	r := NewResponse(
 		WithStatus(http.StatusOK),
 		WithContentType("text/plain"),
@@ -361,16 +367,33 @@ func handleEcho(headers map[string]string, body []byte) *Response {
 	clientEncodings, ok := headers["Accept-Encoding"]
 	if ok {
 		encodings := strings.Split(clientEncodings, ",")
-		log.Println(encodings, len(encodings))
 		for _, encoding := range encodings {
 			e := strings.TrimSpace(encoding)
+			// compress the body and redefine the r.body field
 			if _, isValid := supportedEncodings[e]; isValid {
 				r.encoding = e
-				r.body = nil
+				compressedBody, err := compressBody(body)
+				if err != nil {
+					return nil, err
+				}
+				r.body = compressedBody
 				break
 			}
 		}
 	}
 
-	return r
+	return r, nil
+}
+
+func compressBody(body []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	w := gzip.NewWriter(&buf)
+	defer w.Close()
+
+	_, err := w.Write(body)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
