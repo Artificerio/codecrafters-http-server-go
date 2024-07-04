@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
-	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -344,13 +343,7 @@ func (r *Response) writeResponse(w io.Writer) error {
 	}
 
 	if r.body != nil {
-		length := 0
-		if r.compressed {
-			length = len(r.body) / 2
-		} else {
-			length = len(r.body)
-		}
-		contentLength := fmt.Sprintf("Content-Length: %d\r\n\r\n", length)
+		contentLength := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(r.body))
 		sb.WriteString(contentLength)
 		sb.WriteString(string(r.body))
 	} else {
@@ -405,9 +398,5 @@ func compressBody(body []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	compressedBytes := buf.Bytes()
-
-	hexStr := hex.EncodeToString(compressedBytes)
-
-	return []byte(strings.TrimSpace(hexStr)), nil
+	return buf.Bytes(), nil
 }
