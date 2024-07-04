@@ -360,10 +360,12 @@ func handleEcho(headers map[string]string, body []byte) *Response {
 	)
 	clientEncodings, ok := headers["Accept-Encoding"]
 	if ok {
-		encodings := strings.Fields(clientEncodings)
+		encodings := strings.Split(clientEncodings, ",")
+		log.Println(encodings, len(encodings))
 		for _, encoding := range encodings {
-			if _, isValid := supportedEncodings[encoding]; isValid {
-				r.encoding = encoding
+			e := strings.TrimSpace(encoding)
+			if _, isValid := supportedEncodings[e]; isValid {
+				r.encoding = e
 				r.body = nil
 				break
 			}
