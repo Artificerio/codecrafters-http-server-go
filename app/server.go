@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -29,6 +30,14 @@ const (
 	Empty405 = "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
 	Empty500 = "HTTP/1.1 405 Internal Server Error\r\n\r\n"
 )
+
+var codeToStatus = map[int]string{
+	200: "OK",
+	201: "Created",
+	400: "Bad Request",
+	404: "Not Found",
+	405: "Method Not Allowed",
+}
 
 type Server struct {
 	l    net.Listener
@@ -113,8 +122,16 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error, doneCha
 
 	statusParts := strings.Fields(str)
 	method := statusParts[0]
-	requestTarget := strings.Split(statusParts[1], "/")[1]
-	log.Println(method, requestTarget)
+
+	urlParts := strings.Split(statusParts[1], "/")
+
+	var path, target string
+	path = urlParts[1]
+	if len(urlParts) > 2 {
+		target = urlParts[2]
+	}
+
+	log.Println("here:", method, path, target)
 
 	headers := make(map[string]string)
 	for {
@@ -143,10 +160,34 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error, doneCha
 		transferErrChan <- err
 	}
 
-	if requestTarget == "" {
-		conn.Write([]byte(Empty200))
-	} else {
-		conn.Write([]byte(Empty404))
+	switch path {
+	case "":
+		r := NewResponse(
+			WithStatus(http.StatusOK),
+			WithBody(nil),
+			WithContentType("text/plain"),
+		)
+		err = r.writeResponse(conn)
+		if err != nil {
+			transferErrChan <- err
+		}
+
+	case "echo":
+		r := handleEcho(headers, []byte(target))
+		err = r.writeResponse(conn)
+		if err != nil {
+			transferErrChan <- err
+		}
+	default:
+		r := NewResponse(
+			WithStatus(http.StatusNotFound),
+			WithBody(nil),
+			WithContentType("text/plain"),
+		)
+		err = r.writeResponse(conn)
+		if err != nil {
+			transferErrChan <- err
+		}
 	}
 }
 
@@ -188,4 +229,89 @@ func handleStatus(wg *sync.WaitGroup, transferErrChan <-chan error, doneChan <-c
 			log.Println(msg)
 		}
 	}
+}
+
+type Response struct {
+	status      int
+	body        []byte
+	compressed  bool
+	encoding    string
+	contentType string
+}
+
+type ResponseOption func(r *Response)
+
+func WithStatus(status int) ResponseOption {
+	return func(r *Response) {
+		r.status = status
+	}
+}
+
+func WithBody(body []byte) ResponseOption {
+	return func(r *Response) {
+		r.body = body
+	}
+}
+
+func WithCompressed(compressed bool) ResponseOption {
+	return func(r *Response) {
+		r.compressed = compressed
+	}
+}
+
+func WithEncoding(encoding string) ResponseOption {
+	return func(r *Response) {
+		r.encoding = encoding
+	}
+}
+
+func WithContentType(contentType string) ResponseOption {
+	return func(r *Response) {
+		r.contentType = contentType
+	}
+}
+
+func NewResponse(options ...ResponseOption) *Response {
+	r := &Response{}
+	for _, opt := range options {
+		opt(r)
+	}
+
+	return r
+}
+
+func (r *Response) writeResponse(w io.Writer) error {
+	var sb strings.Builder
+
+	status := fmt.Sprintf("HTTP/1.1 %d %s\r\n", r.status, codeToStatus[r.status])
+	sb.WriteString(status)
+
+	if r.contentType != "" {
+		contentType := fmt.Sprintf("Content-Type: %s\r\n", r.contentType)
+		sb.WriteString(contentType)
+	}
+
+	if r.body != nil {
+		contentLength := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(r.body))
+		sb.WriteString(contentLength)
+		sb.WriteString(string(r.body))
+	} else {
+		sb.WriteString("\r\n")
+	}
+
+	_, err := w.Write([]byte(sb.String()))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func handleEcho(headers map[string]string, body []byte) *Response {
+	r := NewResponse(
+		WithStatus(http.StatusOK),
+		WithContentType("text/plain"),
+		WithBody(body),
+	)
+	return r
 }
