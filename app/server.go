@@ -213,6 +213,15 @@ func (s *Server) handleConn(conn net.Conn, transferErrChan chan<- error) {
 			if err != nil {
 				transferErrChan <- err
 			}
+		case "POST":
+			path := *directory + target
+			file, err := os.Create(path)
+			if err != nil {
+				transferErrChan <- err
+				return
+			}
+			file.WriteString(string(body))
+			conn.Write([]byte(Empty201))
 		}
 	default:
 		r := NewResponse(
